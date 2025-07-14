@@ -21,6 +21,9 @@ class Orm {
     protected $createdAtColumn = 'created_at';
     protected $updatedAtColumn = 'updated_at';
 
+    protected $softDelete = false; // model bazlı aktif/pasif
+    protected $deletedAtColumn = 'deleted_at';
+
     public function __construct($tablo) {
         $this->db = Veritabani::baglan();
         $this->tablo = $tablo;
@@ -81,6 +84,16 @@ class Orm {
             $this->wheres[] = "OR $kolon $islem $paramKey";
         }
         $this->params[$paramKey] = $deger;
+        return $this;
+    }
+
+    public function whereNull($kolon) {
+        $this->wheres[] = "$kolon IS NULL";
+        return $this;
+    }
+
+    public function whereNotNull($kolon) {
+        $this->wheres[] = "$kolon IS NOT NULL";
         return $this;
     }
 
@@ -399,9 +412,35 @@ class Orm {
         return $stmt->execute($veriler);
     }
 
-    public function delete($id) {
-        $sql = "DELETE FROM {$this->tablo} WHERE id = :id";
+    public function delete() {
+        if ($this->softDelete) {
+            return $this->softDelete();
+        }
+
+        return $this->forceDelete();
+    }
+
+    public function softDelete() {
+        if (!$this->softDelete) {
+            throw new Exception("Soft delete özelliği bu modelde aktif değil.");
+        }
+
+        $kolon = $this->deletedAtColumn;
+        $zaman = date('Y-m-d H:i:s');
+
+        $sql = "UPDATE {$this->tablo} SET $kolon = :zaman WHERE {$this->primaryKey} = :id";
         $stmt = $this->db->prepare($sql);
-        return $stmt->execute(['id' => $id]);
+        return $stmt->execute([
+            ':zaman' => $zaman,
+            ':id' => $this->{$this->primaryKey}
+        ]);
+    }
+
+    public function forceDelete() {
+        $sql = "DELETE FROM {$this->tablo} WHERE {$this->primaryKey} = :id";
+        $stmt = $this->db->prepare($sql);
+        return $stmt->execute([
+            ':id' => $this->{$this->primaryKey}
+        ]);
     }
 }
