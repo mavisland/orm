@@ -8,6 +8,7 @@ class Orm {
     protected $order = '';
     protected $limit = '';
     protected $offset = '';
+    protected $with = [];
 
     public function __construct($tablo) {
         $this->db = Veritabani::baglan();
@@ -18,6 +19,24 @@ class Orm {
         $paramKey = ':w_' . count($this->params);
         $this->wheres[] = "$kolon $islem $paramKey";
         $this->params[$paramKey] = $deger;
+        return $this;
+    }
+
+    public function whereIn($kolon, array $degerler) {
+        if (empty($degerler)) {
+            // Boş array sorgu anlamı taşımaz
+            $this->wheres[] = "0=1";
+            return $this;
+        }
+
+        $placeholders = [];
+        foreach ($degerler as $i => $val) {
+            $key = ":w_in_" . count($this->params) + $i;
+            $placeholders[] = $key;
+            $this->params[$key] = $val;
+        }
+
+        $this->wheres[] = "$kolon IN (" . implode(',', $placeholders) . ")";
         return $this;
     }
 
@@ -42,6 +61,61 @@ class Orm {
         return $this;
     }
 
+    protected function loadRelation(array &$models, string $relation) {
+        if (empty($models)) return;
+
+        $relatedModels = [];
+        $relatedModelClass = null;
+
+        // İlk nesneden ilişkili modeli al
+        $firstModel = $models[0];
+
+        if (!method_exists($firstModel, $relation)) {
+            throw new Exception("Relation method '$relation' not found on " . get_class($firstModel));
+        }
+
+        // İlk model üzerinden ilişkili model classını alıyoruz
+        $relatedSample = $firstModel->$relation();
+
+        if (is_array($relatedSample)) {
+            // hasMany
+            $relatedModelClass = get_class($relatedSample[0] ?? null);
+        } else {
+            // belongsTo veya single model
+            $relatedModelClass = get_class($relatedSample);
+        }
+
+        if (!$relatedModelClass) return;
+
+        // Ana modelin localKey alanlarını topla
+        $localKeys = array_map(fn($m) => $m->{$this->getLocalKey($relation)} ?? null, $models);
+        $localKeys = array_filter($localKeys);
+
+        if (empty($localKeys)) return;
+
+        // İlişkili modelde foreignKey ile toplu sorgu yap
+        $relatedModel = new $relatedModelClass();
+
+        // İlişki detaylarını model metodundan alalım:
+        // Burada convention (varsayılan) kullanalım. Dilersen genişletiriz.
+        $foreignKey = $this->getForeignKey($relation);
+
+        $relatedItems = $relatedModel->whereIn($foreignKey, $localKeys)->get();
+
+        // İlişki tipine göre eşle
+        if (is_array($relatedSample)) {
+            // hasMany: her ana modele ilişkili birden çok nesne dizisi bağla
+            foreach ($models as $model) {
+                $model->{$relation} = array_filter($relatedItems, fn($item) => $item->{$foreignKey} == $model->{$this->getLocalKey($relation)});
+            }
+        } else {
+            // belongsTo: tek nesne bağla
+            foreach ($models as $model) {
+                $model->{$relation} = current(array_filter($relatedItems, fn($item) => $item->{$this->getLocalKey($relation)} == $item->{$foreignKey})) ?: null;
+            }
+        }
+    }
+
     public function get() {
         $sql = "SELECT * FROM {$this->tablo}";
         if (!empty($this->wheres)) {
@@ -53,8 +127,18 @@ class Orm {
         $stmt = $this->db->prepare($sql);
         $stmt->execute($this->params);
 
-        $this->resetQuery(); // bir sonraki sorgu için temizlik
-        return $stmt->fetchAll(PDO::FETCH_OBJ);
+        $sonuclar = $stmt->fetchAll(PDO::FETCH_CLASS, get_class($this)); // model nesnesi olarak alıyoruz
+
+        // Eğer with() çağrıldıysa ilişkili modelleri yükle
+        if (!empty($this->with)) {
+            foreach ($this->with as $relation) {
+                $this->loadRelation($sonuclar, $relation);
+            }
+        }
+
+        $this->resetQuery();
+
+        return $sonuclar;
     }
 
     public function first() {
@@ -149,6 +233,10 @@ class Orm {
         return $model->where($ownerKey, '=', $foreignValue)->first();
     }
 
+    public function with(...$relations) {
+        $this->with = $relations;
+        return $this;
+    }
 
     public function create(array $veriler) {
         $alanlar = implode(', ', array_keys($veriler));
