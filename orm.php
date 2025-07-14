@@ -5,6 +5,9 @@ class Orm {
 
     protected $primaryKey = 'id';
 
+    protected $fillable = []; // sadece bunlar set edilir
+    protected $guarded = ['id']; // bunlar asla set edilmez (öncelikli)
+
     protected $wheres = [];
     protected $params = [];
     protected $order = '';
@@ -335,6 +338,27 @@ class Orm {
             'sayfa_sayisi' => ceil($toplam / $adet),
             'adet' => $adet
         ];
+    }
+
+    protected function isFillable($alan) {
+        if (!empty($this->guarded) && in_array($alan, $this->guarded)) {
+            return false;
+        }
+
+        if (!empty($this->fillable)) {
+            return in_array($alan, $this->fillable);
+        }
+
+        return true; // ikisi de boşsa her şey set edilebilir
+    }
+
+    public function fill(array $veriler) {
+        foreach ($veriler as $alan => $deger) {
+            if ($this->isFillable($alan)) {
+                $this->$alan = $deger;
+            }
+        }
+        return $this;
     }
 
     public function save() {
