@@ -83,6 +83,48 @@ class Orm {
         return $this->db->query($sql)->fetchAll(PDO::FETCH_OBJ);
     }
 
+    public function count() {
+        $sql = "SELECT COUNT(*) as toplam FROM {$this->tablo}";
+        if (!empty($this->wheres)) {
+            $sql .= ' WHERE ' . implode(' ', $this->wheres);
+        }
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($this->params);
+
+        $this->resetQuery();
+        return (int) $stmt->fetchColumn();
+    }
+
+    public function exists() {
+        $sql = "SELECT 1 FROM {$this->tablo}";
+        if (!empty($this->wheres)) {
+            $sql .= ' WHERE ' . implode(' ', $this->wheres);
+        }
+        $sql .= " LIMIT 1";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($this->params);
+
+        $this->resetQuery();
+        return (bool) $stmt->fetchColumn();
+    }
+
+    public function pluck($sutun) {
+        $sql = "SELECT {$sutun} FROM {$this->tablo}";
+        if (!empty($this->wheres)) {
+            $sql .= ' WHERE ' . implode(' ', $this->wheres);
+        }
+        $sql .= $this->order;
+        $sql .= $this->limit;
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($this->params);
+
+        $this->resetQuery();
+        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+    }
+
     public function create(array $veriler) {
         $alanlar = implode(', ', array_keys($veriler));
         $degerler = ':' . implode(', :', array_keys($veriler));
