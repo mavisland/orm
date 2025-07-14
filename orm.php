@@ -125,6 +125,31 @@ class Orm {
         return $stmt->fetchAll(PDO::FETCH_COLUMN);
     }
 
+    public function firstPluck($sutun) {
+        $this->limit(1);
+        $sonuc = $this->pluck($sutun);
+        return $sonuc[0] ?? null;
+    }
+
+    public function hasMany($modelClass, $foreignKey, $localKey = 'id') {
+        $localValue = $this->{$localKey} ?? null;
+        if ($localValue === null) {
+            return [];
+        }
+        $model = new $modelClass();
+        return $model->where($foreignKey, '=', $localValue)->get();
+    }
+
+    public function belongsTo($modelClass, $foreignKey, $ownerKey = 'id') {
+        $foreignValue = $this->{$foreignKey} ?? null;
+        if ($foreignValue === null) {
+            return null;
+        }
+        $model = new $modelClass();
+        return $model->where($ownerKey, '=', $foreignValue)->first();
+    }
+
+
     public function create(array $veriler) {
         $alanlar = implode(', ', array_keys($veriler));
         $degerler = ':' . implode(', :', array_keys($veriler));
