@@ -466,4 +466,46 @@ class Orm {
         // get()'e otomatik WHERE koymak yerine tamamen serbest bırakıyoruz
         return $this; // future flag eklenebilir
     }
+
+    public function toArray() {
+        $veriler = get_object_vars($this);
+
+        // Dahili alanları ayıklıyoruz
+        unset($veriler['db'], $veriler['tablo'], $veriler['joins'], $veriler['wheres'],
+            $veriler['params'], $veriler['order'], $veriler['limit'], $veriler['offset'],
+            $veriler['with'], $veriler['select'], $veriler['groupBy'], $veriler['having'],
+            $veriler['distinct'], $veriler['primaryKey'], $veriler['softDelete'],
+            $veriler['timestamps'], $veriler['createdAtColumn'], $veriler['updatedAtColumn'],
+            $veriler['deletedAtColumn']);
+
+        // Eager-loaded ilişkileri kontrol et
+        foreach ($this->with as $relation) {
+            if (isset($this->$relation)) {
+                $ilişkili = $this->$relation;
+
+                if (is_array($ilişkili)) {
+                    $veriler[$relation] = array_map(fn($item) => $item instanceof self ? $item->toArray() : $item, $ilişkili);
+                } elseif ($ilişkili instanceof self) {
+                    $veriler[$relation] = $ilişkili->toArray();
+                } else {
+                    $veriler[$relation] = $ilişkili;
+                }
+            }
+        }
+
+        return $veriler;
+    }
+
+
+    public static function collectionToArray(array $liste) {
+        return array_map(fn($item) => $item->toArray(), $liste);
+    }
+
+    public function toJson($options = 0) {
+        return json_encode($this->toArray(), $options);
+    }
+
+    public static function collectionToJson(array $liste, $options = 0) {
+        return json_encode(self::collectionToArray($liste), $options);
+    }
 }
