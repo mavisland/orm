@@ -11,6 +11,9 @@ class Orm {
     protected $with = [];
     protected $joins = [];
     protected $select = '*';
+    protected $groupBy = '';
+    protected $having = '';
+    protected $distinct = false;
 
     public function __construct($tablo) {
         $this->db = Veritabani::baglan();
@@ -72,6 +75,21 @@ class Orm {
             $this->wheres[] = "OR $kolon $islem $paramKey";
         }
         $this->params[$paramKey] = $deger;
+        return $this;
+    }
+
+    public function groupBy($sutun) {
+        $this->groupBy = " GROUP BY $sutun";
+        return $this;
+    }
+
+    public function having($kosul) {
+        $this->having = " HAVING $kosul";
+        return $this;
+    }
+
+    public function distinct($durum = true) {
+        $this->distinct = $durum;
         return $this;
     }
 
@@ -141,18 +159,20 @@ class Orm {
     }
 
     public function get() {
-        $sql = "SELECT * FROM {$this->tablo}";
+        $select = $this->distinct ? "DISTINCT {$this->select}" : $this->select;
 
-        // JOIN'leri ekle
+        $sql = "SELECT {$select} FROM {$this->tablo}";
+
         if (!empty($this->joins)) {
             $sql .= ' ' . implode(' ', $this->joins);
         }
 
-        // WHERE
         if (!empty($this->wheres)) {
             $sql .= ' WHERE ' . implode(' ', $this->wheres);
         }
 
+        $sql .= $this->groupBy;
+        $sql .= $this->having;
         $sql .= $this->order;
         $sql .= $this->limit;
 
@@ -188,6 +208,9 @@ class Orm {
         $this->joins = [];
         $this->select = '*';
         $this->with = [];
+        $this->groupBy = '';
+        $this->having = '';
+        $this->distinct = false;
     }
 
     public function find($id) {
