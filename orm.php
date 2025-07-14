@@ -27,6 +27,9 @@ class Orm {
     protected $softDelete = false; // model bazlı aktif/pasif
     protected $deletedAtColumn = 'deleted_at';
 
+    protected $rules = [];
+    protected $errors = [];
+
     public function __construct($tablo) {
         $this->db = Veritabani::baglan();
         $this->tablo = $tablo;
@@ -531,5 +534,93 @@ class Orm {
 
     public static function collectionToJson(array $liste, $options = 0) {
         return json_encode(self::collectionToArray($liste), $options);
+    }
+
+    protected function validateRequired($alan, $deger, $params) {
+        if ($deger === null || $deger === '') {
+            $this->errors[$alan][] = "$alan alanı zorunludur.";
+        }
+    }
+
+    protected function validateEmail($alan, $deger, $params) {
+        if ($deger && !filter_var($deger, FILTER_VALIDATE_EMAIL)) {
+            $this->errors[$alan][] = "$alan geçerli bir e-posta olmalıdır.";
+        }
+    }
+
+    protected function validateMin($alan, $deger, $params) {
+        if (is_numeric($deger) && $deger < (int)$params) {
+            $this->errors[$alan][] = "$alan alanı minimum $params değerinde olmalıdır.";
+        } elseif (is_string($deger) && mb_strlen($deger) < (int)$params) {
+            $this->errors[$alan][] = "$alan alanı minimum $params karakter olmalıdır.";
+        }
+    }
+
+    protected function validateInteger($alan, $deger, $params) {
+        if ($deger !== null && !filter_var($deger, FILTER_VALIDATE_INT)) {
+            $this->errors[$alan][] = "$alan alanı tamsayı olmalıdır.";
+        }
+    }
+
+    protected function validateRegex($alan, $deger, $params) {
+        if ($deger && !preg_match($params, $deger)) {
+            $this->errors[$alan][] = "$alan alanı geçerli formatta değil.";
+        }
+    }
+
+    protected function validateUnique($alan, $deger, $params) {
+        $sql = "SELECT COUNT(*) FROM {$this->tablo} WHERE $alan = :deger";
+
+        // Güncelleme sırasında kendi kaydını saymamak için id kontrolü
+        if (isset($this->{$this->primaryKey})) {
+            $sql .= " AND {$this->primaryKey} != :id";
+        }
+
+        $stmt = $this->db->prepare($sql);
+        $paramsArr = [':deger' => $deger];
+        if (isset($this->{$this->primaryKey})) {
+            $paramsArr[':id'] = $this->{$this->primaryKey};
+        }
+        $stmt->execute($paramsArr);
+
+        if ($stmt->fetchColumn() > 0) {
+            $this->errors[$alan][] = "$alan zaten kullanılıyor.";
+        }
+    }
+
+    protected function validateCallback($alan, $deger, $params) {
+        if (method_exists($this, $params)) {
+            $this->$params($alan, $deger);
+        } else {
+            $this->errors[$alan][] = "Geçersiz callback fonksiyon: $params";
+        }
+    }
+
+    public function validate() {
+        $this->errors = [];
+
+        foreach ($this->rules as $alan => $kurallar) {
+            $deger = $this->$alan ?? null;
+
+            foreach ($kurallar as $kural) {
+                $params = null;
+
+                if (strpos($kural, ':') !== false) {
+                    [$kural, $params] = explode(':', $kural, 2);
+                }
+
+                $method = 'validate' . ucfirst($kural);
+
+                if (method_exists($this, $method)) {
+                    $this->$method($alan, $deger, $params);
+                }
+            }
+        }
+
+        return empty($this->errors);
+    }
+
+    public function getErrors() {
+        return $this->errors;
     }
 }
