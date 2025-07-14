@@ -30,9 +30,56 @@ class Orm {
     protected $rules = [];
     protected $errors = [];
 
+    protected $debug = false;
+    protected $queryLog = [];
+
     public function __construct($tablo) {
         $this->db = Veritabani::baglan();
         $this->tablo = $tablo;
+    }
+
+    public function enableDebug(bool $durum = true) {
+        if ($durum === null) {
+            $durum = (defined('APP_DEBUG') && APP_DEBUG === true);
+        }
+
+        $this->debug = $durum;
+
+        return $this;
+    }
+
+    protected function logQuery(string $sql, array $params = []) {
+        if ($this->debug) {
+            $this->queryLog[] = [
+                'query' => $sql,
+                'params' => $params,
+                'time' => date('Y-m-d H:i:s'),
+            ];
+        }
+    }
+
+    protected function runQuery(string $sql, array $params = []) {
+        $stmt = $this->db->prepare($sql);
+        $this->logQuery($sql, $params);
+
+        try {
+            $stmt->execute($params);
+        } catch (PDOException $e) {
+            if ($this->debug) {
+                error_log("SQL Hatası: " . $e->getMessage() . " - Sorgu: $sql");
+            }
+            throw $e;
+        }
+
+        return $stmt;
+    }
+
+    public function getQueryLog() {
+        return $this->queryLog;
+    }
+
+    public function getLastQuery() {
+        return end($this->queryLog);
     }
 
     public function select($sutunlar) {
@@ -201,8 +248,7 @@ class Orm {
         $sql .= $this->order;
         $sql .= $this->limit;
 
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute($this->params);
+        $stmt = $this->runQuery($sql, $this->params);
 
         $sonuclar = $stmt->fetchAll(PDO::FETCH_CLASS, get_class($this)); // model nesnesi olarak alıyoruz
 
@@ -240,8 +286,7 @@ class Orm {
 
     public function find($id) {
         $sql = "SELECT * FROM {$this->tablo} WHERE id = :id LIMIT 1";
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute(['id' => $id]);
+        $stmt = $this->runQuery($sql, ['id' => $id]);
         return $stmt->fetch(PDO::FETCH_OBJ);
     }
 
@@ -256,8 +301,7 @@ class Orm {
             $sql .= ' WHERE ' . implode(' ', $this->wheres);
         }
 
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute($this->params);
+        $stmt = $this->runQuery($sql, $this->params);
 
         $this->resetQuery();
         return (int) $stmt->fetchColumn();
@@ -270,8 +314,7 @@ class Orm {
         }
         $sql .= " LIMIT 1";
 
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute($this->params);
+        $stmt = $this->runQuery($sql, $this->params);
 
         $this->resetQuery();
         return (bool) $stmt->fetchColumn();
@@ -285,8 +328,7 @@ class Orm {
         $sql .= $this->order;
         $sql .= $this->limit;
 
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute($this->params);
+        $stmt = $this->runQuery($sql, $this->params);
 
         $this->resetQuery();
         return $stmt->fetchAll(PDO::FETCH_COLUMN);
@@ -300,24 +342,31 @@ class Orm {
 
     public function hasMany($modelClass, $foreignKey, $localKey = 'id') {
         $localValue = $this->{$localKey} ?? null;
+
         if ($localValue === null) {
             return [];
         }
+
         $model = new $modelClass();
+
         return $model->where($foreignKey, '=', $localValue)->get();
     }
 
     public function belongsTo($modelClass, $foreignKey, $ownerKey = 'id') {
         $foreignValue = $this->{$foreignKey} ?? null;
+
         if ($foreignValue === null) {
             return null;
         }
+
         $model = new $modelClass();
+
         return $model->where($ownerKey, '=', $foreignValue)->first();
     }
 
     public function with(...$relations) {
         $this->with = $relations;
+
         return $this;
     }
 
@@ -361,6 +410,7 @@ class Orm {
                 $this->$alan = $deger;
             }
         }
+
         return $this;
     }
 
@@ -402,8 +452,7 @@ class Orm {
             }
 
             $sql = "UPDATE {$this->tablo} SET " . implode(', ', $set) . " WHERE {$this->primaryKey} = :{$this->primaryKey}";
-            $stmt = $this->db->prepare($sql);
-            $sonuc = $stmt->execute($veriler);
+            $stmt = $this->runQuery($sql, $veriler);
 
             $this->triggerEvent('afterSave');
 
@@ -421,8 +470,7 @@ class Orm {
             $degerler = ':' . implode(', :', array_keys($veriler));
 
             $sql = "INSERT INTO {$this->tablo} ($alanlar) VALUES ($degerler)";
-            $stmt = $this->db->prepare($sql);
-            $basarili = $stmt->execute($veriler);
+            $basarili = $this->runQuery($sql, $veriler);
 
             if ($basarili) {
                 $this->{$this->primaryKey} = $this->db->lastInsertId();
@@ -438,19 +486,20 @@ class Orm {
         $alanlar = implode(', ', array_keys($veriler));
         $degerler = ':' . implode(', :', array_keys($veriler));
         $sql = "INSERT INTO {$this->tablo} ($alanlar) VALUES ($degerler)";
-        $stmt = $this->db->prepare($sql);
-        return $stmt->execute($veriler);
+        return $this->runQuery($sql, $veriler);
     }
 
     public function update($id, array $veriler) {
         $set = [];
+
         foreach ($veriler as $key => $val) {
             $set[] = "$key = :$key";
         }
+
         $sql = "UPDATE {$this->tablo} SET " . implode(', ', $set) . " WHERE id = :id";
         $veriler['id'] = $id;
-        $stmt = $this->db->prepare($sql);
-        return $stmt->execute($veriler);
+
+        return $this->runQuery($sql, $veriler);
     }
 
     public function delete() {
@@ -472,8 +521,7 @@ class Orm {
         $zaman = date('Y-m-d H:i:s');
 
         $sql = "UPDATE {$this->tablo} SET $kolon = :zaman WHERE {$this->primaryKey} = :id";
-        $stmt = $this->db->prepare($sql);
-        $sonuc = $stmt->execute([
+        $sonuc = $this->runQuery($sql, [
             ':zaman' => $zaman,
             ':id' => $this->{$this->primaryKey}
         ]);
@@ -487,8 +535,7 @@ class Orm {
         $this->triggerEvent('beforeDelete');
 
         $sql = "DELETE FROM {$this->tablo} WHERE {$this->primaryKey} = :id";
-        $stmt = $this->db->prepare($sql);
-        $sonuc = $stmt->execute([
+        $sonuc = $this->runQuery($sql, [
             ':id' => $this->{$this->primaryKey}
         ]);
 
@@ -505,8 +552,8 @@ class Orm {
         $kolon = $this->deletedAtColumn;
 
         $sql = "UPDATE {$this->tablo} SET $kolon = NULL WHERE {$this->primaryKey} = :id";
-        $stmt = $this->db->prepare($sql);
-        return $stmt->execute([
+
+        return $this->runQuery($sql, [
             ':id' => $this->{$this->primaryKey}
         ]);
     }
@@ -602,12 +649,13 @@ class Orm {
             $sql .= " AND {$this->primaryKey} != :id";
         }
 
-        $stmt = $this->db->prepare($sql);
         $paramsArr = [':deger' => $deger];
+
         if (isset($this->{$this->primaryKey})) {
             $paramsArr[':id'] = $this->{$this->primaryKey};
         }
-        $stmt->execute($paramsArr);
+
+        $this->runQuery($sql, $paramsArr);
 
         if ($stmt->fetchColumn() > 0) {
             $this->errors[$alan][] = "$alan zaten kullanılıyor.";
