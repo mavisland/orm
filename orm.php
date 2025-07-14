@@ -9,10 +9,34 @@ class Orm {
     protected $limit = '';
     protected $offset = '';
     protected $with = [];
+    protected $joins = [];
+    protected $select = '*';
 
     public function __construct($tablo) {
         $this->db = Veritabani::baglan();
         $this->tablo = $tablo;
+    }
+
+    public function select($sutunlar) {
+        $this->select = $sutunlar;
+        return $this;
+    }
+
+    public function join($tip, $tablo, $birinciKolon, $operator, $ikinciKolon) {
+        $this->joins[] = strtoupper($tip) . " JOIN $tablo ON $birinciKolon $operator $ikinciKolon";
+        return $this;
+    }
+
+    public function leftJoin($tablo, $birinciKolon, $operator, $ikinciKolon) {
+        return $this->join('LEFT', $tablo, $birinciKolon, $operator, $ikinciKolon);
+    }
+
+    public function innerJoin($tablo, $birinciKolon, $operator, $ikinciKolon) {
+        return $this->join('INNER', $tablo, $birinciKolon, $operator, $ikinciKolon);
+    }
+
+    public function rightJoin($tablo, $birinciKolon, $operator, $ikinciKolon) {
+        return $this->join('RIGHT', $tablo, $birinciKolon, $operator, $ikinciKolon);
     }
 
     public function where($kolon, $islem, $deger) {
@@ -118,9 +142,17 @@ class Orm {
 
     public function get() {
         $sql = "SELECT * FROM {$this->tablo}";
+
+        // JOIN'leri ekle
+        if (!empty($this->joins)) {
+            $sql .= ' ' . implode(' ', $this->joins);
+        }
+
+        // WHERE
         if (!empty($this->wheres)) {
             $sql .= ' WHERE ' . implode(' ', $this->wheres);
         }
+
         $sql .= $this->order;
         $sql .= $this->limit;
 
@@ -153,6 +185,9 @@ class Orm {
         $this->order = '';
         $this->limit = '';
         $this->offset = '';
+        $this->joins = [];
+        $this->select = '*';
+        $this->with = [];
     }
 
     public function find($id) {
