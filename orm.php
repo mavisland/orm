@@ -443,4 +443,27 @@ class Orm {
             ':id' => $this->{$this->primaryKey}
         ]);
     }
+
+    public function restore() {
+        if (!$this->softDelete) {
+            throw new Exception("Restore özelliği bu modelde aktif değil.");
+        }
+
+        $kolon = $this->deletedAtColumn;
+
+        $sql = "UPDATE {$this->tablo} SET $kolon = NULL WHERE {$this->primaryKey} = :id";
+        $stmt = $this->db->prepare($sql);
+        return $stmt->execute([
+            ':id' => $this->{$this->primaryKey}
+        ]);
+    }
+
+    public function onlyTrashed() {
+        return $this->whereNotNull($this->deletedAtColumn);
+    }
+
+    public function withTrashed() {
+        // get()'e otomatik WHERE koymak yerine tamamen serbest bırakıyoruz
+        return $this; // future flag eklenebilir
+    }
 }
