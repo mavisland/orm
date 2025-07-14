@@ -1,0 +1,33 @@
+{
+  "name": "mavisland/orm",
+  "type": "library",
+  "description": "A lightweight nearly-zero-configuration object-relational mapper and fluent query builder for PHP.",
+  "keywords": [
+    "mysql",
+    "pdo",
+    "orm"
+  ],
+  "homepage": "https://mavisland.github.io/orm",
+  "support": {
+    "issues": "https://github.com/mavisland/orm/issues",
+    "source": "https://github.com/mavisland/orm"
+  },
+  "authors": [
+    {
+      "name": "Tanju Yıldız",
+      "email": "ben@tanjuyildiz.com",
+      "homepage": "http://tanjuyildiz.com"
+    }
+  ],
+  "license": [
+    "MIT"
+  ],
+  "require": {
+    "php": ">=7.4"
+  },
+  "autoload": {
+    "classmap": [
+      "orm.php"
+    ]
+  }
+}
