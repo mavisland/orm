@@ -296,6 +296,28 @@ class Orm {
         return $this;
     }
 
+    public function paginate($sayfa = 1, $adet = 10) {
+        $sayfa = max(1, (int)$sayfa);
+        $adet = max(1, (int)$adet);
+        $offset = ($sayfa - 1) * $adet;
+
+        // Toplam kayıt sayısını hesapla
+        $sayac = clone $this;
+        $toplam = $sayac->count();
+
+        // Sayfalı veriyi çek
+        $this->limit($adet, $offset);
+        $veriler = $this->get();
+
+        return [
+            'data' => $veriler,
+            'toplam' => $toplam,
+            'sayfa' => $sayfa,
+            'sayfa_sayisi' => ceil($toplam / $adet),
+            'adet' => $adet
+        ];
+    }
+
     public function create(array $veriler) {
         $alanlar = implode(', ', array_keys($veriler));
         $degerler = ':' . implode(', :', array_keys($veriler));
