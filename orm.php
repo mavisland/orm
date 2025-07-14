@@ -364,7 +364,15 @@ class Orm {
         return $this;
     }
 
+    protected function triggerEvent(string $event) {
+        if (method_exists($this, $event)) {
+            $this->$event();
+        }
+    }
+
     public function save() {
+        $this->triggerEvent('beforeSave');
+
         $veriler = get_object_vars($this);
 
         // iç özellikleri temizle
@@ -395,7 +403,11 @@ class Orm {
 
             $sql = "UPDATE {$this->tablo} SET " . implode(', ', $set) . " WHERE {$this->primaryKey} = :{$this->primaryKey}";
             $stmt = $this->db->prepare($sql);
-            return $stmt->execute($veriler);
+            $sonuc = $stmt->execute($veriler);
+
+            $this->triggerEvent('afterSave');
+
+            return $sonuc;
         } else {
             // Yeni kayıt
             if ($this->timestamps) {
@@ -415,6 +427,8 @@ class Orm {
             if ($basarili) {
                 $this->{$this->primaryKey} = $this->db->lastInsertId();
             }
+
+            $this->triggerEvent('afterSave');
 
             return $basarili;
         }
@@ -452,23 +466,35 @@ class Orm {
             throw new Exception("Soft delete özelliği bu modelde aktif değil.");
         }
 
+        $this->triggerEvent('beforeDelete');
+
         $kolon = $this->deletedAtColumn;
         $zaman = date('Y-m-d H:i:s');
 
         $sql = "UPDATE {$this->tablo} SET $kolon = :zaman WHERE {$this->primaryKey} = :id";
         $stmt = $this->db->prepare($sql);
-        return $stmt->execute([
+        $sonuc = $stmt->execute([
             ':zaman' => $zaman,
             ':id' => $this->{$this->primaryKey}
         ]);
+
+        $this->triggerEvent('afterDelete');
+
+        return $sonuc;
     }
 
     public function forceDelete() {
+        $this->triggerEvent('beforeDelete');
+
         $sql = "DELETE FROM {$this->tablo} WHERE {$this->primaryKey} = :id";
         $stmt = $this->db->prepare($sql);
-        return $stmt->execute([
+        $sonuc = $stmt->execute([
             ':id' => $this->{$this->primaryKey}
         ]);
+
+        $this->triggerEvent('afterDelete');
+
+        return $sonuc;
     }
 
     public function restore() {
