@@ -17,6 +17,10 @@ class Orm {
     protected $having = '';
     protected $distinct = false;
 
+    protected $timestamps = true; // modeller isterse kapatabilir
+    protected $createdAtColumn = 'created_at';
+    protected $updatedAtColumn = 'updated_at';
+
     public function __construct($tablo) {
         $this->db = Veritabani::baglan();
         $this->tablo = $tablo;
@@ -321,18 +325,28 @@ class Orm {
     }
 
     public function save() {
-        $veriler = get_object_vars($this); // nesnenin tüm özelliklerini al
+        $veriler = get_object_vars($this);
+
+        // iç özellikleri temizle
         unset($veriler['db'], $veriler['tablo'], $veriler['joins'], $veriler['wheres'],
             $veriler['params'], $veriler['order'], $veriler['limit'], $veriler['offset'],
             $veriler['with'], $veriler['select'], $veriler['groupBy'], $veriler['having'],
-            $veriler['distinct'], $veriler['primaryKey']); // iç işleyiş alanlarını çıkar
+            $veriler['distinct'], $veriler['primaryKey'], $veriler['timestamps'],
+            $veriler['createdAtColumn'], $veriler['updatedAtColumn']);
 
         $id = $veriler[$this->primaryKey] ?? null;
 
+        $simdi = date('Y-m-d H:i:s');
+
         if ($id) {
-            // Güncelle
+            // Güncelleme
+            if ($this->timestamps && property_exists($this, $this->updatedAtColumn)) {
+                $this->{$this->updatedAtColumn} = $simdi;
+                $veriler[$this->updatedAtColumn] = $simdi;
+            }
+
             $verilerKopya = $veriler;
-            unset($verilerKopya[$this->primaryKey]); // id'yi update'e dahil etme
+            unset($verilerKopya[$this->primaryKey]);
 
             $set = [];
             foreach ($verilerKopya as $key => $val) {
@@ -344,6 +358,13 @@ class Orm {
             return $stmt->execute($veriler);
         } else {
             // Yeni kayıt
+            if ($this->timestamps) {
+                $this->{$this->createdAtColumn} = $simdi;
+                $this->{$this->updatedAtColumn} = $simdi;
+                $veriler[$this->createdAtColumn] = $simdi;
+                $veriler[$this->updatedAtColumn] = $simdi;
+            }
+
             $alanlar = implode(', ', array_keys($veriler));
             $degerler = ':' . implode(', :', array_keys($veriler));
 
