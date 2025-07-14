@@ -3,6 +3,8 @@ class Orm {
     protected $db;
     protected $tablo;
 
+    protected $primaryKey = 'id';
+
     protected $wheres = [];
     protected $params = [];
     protected $order = '';
@@ -316,6 +318,45 @@ class Orm {
             'sayfa_sayisi' => ceil($toplam / $adet),
             'adet' => $adet
         ];
+    }
+
+    public function save() {
+        $veriler = get_object_vars($this); // nesnenin tüm özelliklerini al
+        unset($veriler['db'], $veriler['tablo'], $veriler['joins'], $veriler['wheres'],
+            $veriler['params'], $veriler['order'], $veriler['limit'], $veriler['offset'],
+            $veriler['with'], $veriler['select'], $veriler['groupBy'], $veriler['having'],
+            $veriler['distinct'], $veriler['primaryKey']); // iç işleyiş alanlarını çıkar
+
+        $id = $veriler[$this->primaryKey] ?? null;
+
+        if ($id) {
+            // Güncelle
+            $verilerKopya = $veriler;
+            unset($verilerKopya[$this->primaryKey]); // id'yi update'e dahil etme
+
+            $set = [];
+            foreach ($verilerKopya as $key => $val) {
+                $set[] = "$key = :$key";
+            }
+
+            $sql = "UPDATE {$this->tablo} SET " . implode(', ', $set) . " WHERE {$this->primaryKey} = :{$this->primaryKey}";
+            $stmt = $this->db->prepare($sql);
+            return $stmt->execute($veriler);
+        } else {
+            // Yeni kayıt
+            $alanlar = implode(', ', array_keys($veriler));
+            $degerler = ':' . implode(', :', array_keys($veriler));
+
+            $sql = "INSERT INTO {$this->tablo} ($alanlar) VALUES ($degerler)";
+            $stmt = $this->db->prepare($sql);
+            $basarili = $stmt->execute($veriler);
+
+            if ($basarili) {
+                $this->{$this->primaryKey} = $this->db->lastInsertId();
+            }
+
+            return $basarili;
+        }
     }
 
     public function create(array $veriler) {
