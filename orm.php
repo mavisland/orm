@@ -1,5 +1,14 @@
 <?php
+
+define('DB_HOST', 'localhost');
+define('DB_NAME', 'veritabani');
+define('DB_CHARSET', 'utf8mb4');
+define('DB_USER', 'root');
+define('DB_PASS', '');
+
 class Orm {
+    protected static $pdo = null;
+
     protected $db;
     protected $tablo;
 
@@ -34,7 +43,20 @@ class Orm {
     protected $queryLog = [];
 
     public function __construct($tablo) {
-        $this->db = Veritabani::baglan();
+        if (!self::$pdo) {
+            $dsn = 'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=' . DB_CHARSET;
+
+            try {
+                self::$pdo = new PDO($dsn, DB_USER, DB_PASS, [
+                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_OBJ,
+                ]);
+            } catch (PDOException $e) {
+                die("Veritabanı bağlantı hatası: " . $e->getMessage());
+            }
+        }
+
+        $this->db = self::$pdo;
         $this->tablo = $tablo;
     }
 
