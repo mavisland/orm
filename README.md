@@ -1,92 +1,200 @@
-# ORM
+# 🔥 ORM - Hafif, Sade, Güçlü
 
-PHP ile saf PDO kullanarak geliştirilmiş, minimal ama güçlü bir ORM (Object-Relational Mapper) kütüphanesi.
+Bu sınıf, saf PHP ile yazılmış, framework bağımsız, sade ama güçlü bir ORM yapısıdır.
+PDO kullanır, Singleton deseniyle bağlantıyı tek seferde kurar ve Laravel benzeri kullanım kolaylığı sunar.
 
-## Özellikler
+---
 
-- Basit ve anlaşılır fluent API
-- Otomatik insert / update işlemleri (`save()` metodu)
-- Soft delete ve restore destekleri
-- `hasMany` ve `belongsTo` ilişkileri
-- Eager loading (`with()`)
-- Query builder: `where()`, `orWhere()`, `join()`, `groupBy()`, `having()`, `orderBy()`, `limit()`
-- Sayfalama desteği (`paginate()`)
-- Veri doğrulama (`validate()` ve kurallar)
-- Fillable ve guarded alanlar ile güvenli veri setleme
-- JSON ve dizi dönüşümleri (`toJson()`, `toArray()`)
-- Debug modu ile sorgu loglama
-- Prepared statements ile güvenli sorgular
+## 🚀 Özellikler
 
-## Kurulum
+✅ PDO ile güvenli bağlantı
+✅ Singleton bağlantı (tek sefer açılır)
+✅ `define()` ile kolay yapılandırma
+✅ Kolon seçimi, `where()`, `join()`, `groupBy()` gibi SQL kolaylıkları
+✅ `save()`, `delete()`, `softDelete()` ve `restore()` gibi model işlemleri
+✅ `fillable`, `guarded` ile güvenli veri setleme
+✅ `validate()` ile model bazlı doğrulama
+✅ `hasMany`, `belongsTo`, `with()` ile ilişkiler
+✅ `toArray()`, `toJson()` dönüşümleri
+✅ Sayfalama (`paginate()`)
 
-ORM saf PHP ile yazılmıştır. Tek ihtiyacınız PDO ile bağlantı sağlayan bir `Veritabani::baglan()` fonksiyonudur.
+---
+
+## ⚙️ Kurulum
+
+### 1. Veritabanı Yapılandırması
+
+`config.php` gibi bir dosyada tanımlayın:
 
 ```php
-// Örnek veritabanı bağlantısı
-class Veritabani {
-    public static function baglan() {
-        return new PDO('mysql:host=localhost;dbname=veritabani;charset=utf8', 'kullanici', 'sifre');
+<?php
+define('DB_HOST', 'localhost');
+define('DB_NAME', 'veritabani');
+define('DB_CHARSET', 'utf8mb4');
+define('DB_USER', 'root');
+define('DB_PASS', '');
+```
+
+### 2. ORM Sınıfını Dahil Et
+
+```php
+require 'config.php';
+require 'Orm.php';
+```
+
+---
+
+## 🔧 Kullanım
+
+### ✅ Model Tanımı
+
+Her modelin kendi sınıfı olmalı. Örneğin:
+
+```php
+class Kullanici extends Orm {
+    protected $fillable = ['ad', 'email'];
+    protected $tablo = 'kullanicilar';
+}
+```
+
+> Not: Alternatif olarak constructor ile tablo adı da verilebilir:
+>
+> `new Orm('kullanicilar')`
+
+---
+
+### 📄 Kayıt Listeleme
+
+```php
+$kullanici = new Kullanici();
+$veriler = $kullanici->where('aktif', 1)->orderBy('id', 'DESC')->get();
+```
+
+### 👤 Tek Kayıt
+
+```php
+$kullanici = (new Kullanici())->find(1);
+```
+
+### ➕ Yeni Kayıt
+
+```php
+$k = new Kullanici();
+$k->fill([
+    'ad' => 'Tanju',
+    'email' => 'tanju@example.com'
+]);
+$k->save();
+```
+
+### ✏️ Güncelleme
+
+```php
+$k = (new Kullanici())->find(1);
+$k->email = 'yeni@example.com';
+$k->save();
+```
+
+### ❌ Silme / Soft Delete
+
+```php
+$k = (new Kullanici())->find(1);
+$k->delete(); // softDelete() özelliği açıksa deleted_at kolonunu günceller
+```
+
+---
+
+## 🔁 İlişkiler
+
+### `hasMany`:
+
+```php
+class Kullanici extends Orm {
+    public function yazilar() {
+        return $this->hasMany(Yazi::class, 'kullanici_id');
     }
 }
 ```
 
-## Kullanım
+### `belongsTo`:
 
 ```php
-require 'Orm.php';
+class Yazi extends Orm {
+    public function yazar() {
+        return $this->belongsTo(Kullanici::class, 'kullanici_id');
+    }
+}
+```
 
+### Eager Loading:
+
+```php
+$veriler = (new Yazi())->with('yazar')->get();
+```
+
+---
+
+## ✅ Doğrulama (Validation)
+
+```php
 class Kullanici extends Orm {
-    protected $tablo = 'kullanicilar';
-    protected $fillable = ['ad', 'soyad', 'email'];
     protected $rules = [
-        'email' => ['required', 'email', 'unique'],
-        'ad' => ['required', 'min:2']
+        'ad' => ['required', 'min:3'],
+        'email' => ['required', 'email', 'unique']
     ];
 }
-
-// Yeni kullanıcı oluşturma
-$kullanici = new Kullanici();
-$kullanici->fill([
-    'ad' => 'Tanju',
-    'soyad' => 'Yıldız',
-    'email' => 'tanju@example.com'
-]);
-
-if ($kullanici->validate()) {
-    $kullanici->save();
-} else {
-    print_r($kullanici->getErrors());
-}
-
-// Veri çekme
-$aktifKullanicilar = (new Kullanici())
-    ->where('durum', '=', 1)
-    ->orderBy('id', 'DESC')
-    ->limit(10)
-    ->get();
-
-// İlişkili modellerle eager loading
-$kullanicilar = (new Kullanici())
-    ->with('roller')
-    ->get();
-
-// Sayfalama
-$sayfa = 2;
-$sonuc = (new Kullanici())->paginate($sayfa, 15);
-print_r($sonuc['data']);
-echo "Toplam sayfa: " . $sonuc['sayfa_sayisi'];
 ```
-
-## Debug Modu
 
 ```php
-$orm = new Kullanici();
-$orm->enableDebug(true);
-$orm->where('durum', 1)->get();
-print_r($orm->getQueryLog());
-echo "Son sorgu: " . $orm->getLastQuery();
+$k = new Kullanici();
+$k->fill($_POST);
+
+if ($k->validate()) {
+    $k->save();
+} else {
+    print_r($k->getErrors());
+}
 ```
 
-### Lisans
+---
 
-Bu proje MIT lisansı altında dağıtılmaktadır. Detaylar için LICENSE dosyasına bakabilirsiniz.
+## 🔄 Dönüştürmeler
+
+```php
+$k = (new Kullanici())->find(1);
+
+$array = $k->toArray();
+$json  = $k->toJson();
+```
+
+---
+
+## 📄 Sayfalama
+
+```php
+$k = new Kullanici();
+$sonuc = $k->where('aktif', 1)->paginate(2, 10); // 2. sayfadan 10 kayıt getir
+
+// $sonuc['data'], $sonuc['toplam'], $sonuc['sayfa_sayisi'] vs.
+```
+
+---
+
+## 🎯 Notlar
+
+- Her model sınıfı `Orm` sınıfından türetilmeli
+- Model başında tablo adı belirtebilir ya da constructor'da verebilirsin
+- `softDelete`, `timestamps`, `fillable`, `guarded` gibi özellikler model özelinde açılıp kapatılabilir
+
+---
+
+## 💬 Katkıda Bulunmak
+
+Bu ORM sınıfı, sade projeler için ideal bir başlangıçtır.
+Pull request veya issue ile katkıda bulunmaktan çekinme! 🙌
+
+---
+
+## 🪪 Lisans
+
+MIT License
